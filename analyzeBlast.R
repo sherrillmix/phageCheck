@@ -2,9 +2,18 @@ library(dnar)
 library(parallel)
 library(IRanges)
 
-condenseBlast<-function(xx){
-  out<-by(xx[,c('qStart','qEnd')],xx$qName,function(yy){
-    width(reduce(IRanges(yy$qStart,yy$qEnd)))
+condenseBlast<-function(xx,subtract=NULL){
+  if(!is.null(subtract)){
+    subRanges<-out<-by(subtract[,c('qStart','qEnd')],subtract$qName,function(yy){
+      return(reduce(IRanges(yy$qStart,yy$qEnd)))
+    })
+  }
+  out<-by(xx[,c('qStart','qEnd','qName')],xx$qName,function(yy){
+    reduced<-reduce(IRanges(yy$qStart,yy$qEnd))
+    if(!is.null(subtract)&&!is.null(subRanges[[yy$qName[1]]])){
+      reduced<-setdiff(reduced,subRanges[[yy$qName[1]]])
+    }
+    return(sum(width(reduced)))
   })
   return(unlist(out))
 }
@@ -27,25 +36,31 @@ results<-data.frame('name'=unlist(lapply(seqs,function(x)x$name)),'nchar'=unlist
 blastCover<-lapply(blasts,condenseBlast)
 blastAllCover<-lapply(blastAlls,condenseBlast)
 blastBactCover<-lapply(blastBacts,condenseBlast)
+blastBactCoverMinusPhage<-mapply(function(bac,phage1,phage2)condenseBlast(bac,rbind(phage1,phage2)),blastBacts,blasts,blastAlls)
 results$blastAllCover<-NA
 results$blastCover<-NA
 results$bactCover<-NA
+results$bactMinusPhage<-NA
 for(ii in names(blastCover)){
   message(ii)
   results[results$set==ii,'blastCover']<-blastCover[[ii]][results[results$set==ii,'name']]
   results[results$set==ii,'blastAllCover']<-blastAllCover[[ii]][results[results$set==ii,'name']]
   results[results$set==ii,'bactCover']<-blastBactCover[[ii]][results[results$set==ii,'name']]
+  results[results$set==ii,'bactMinusPhage']<-blastBactCoverMinusPhage[[ii]][results[results$set==ii,'name']]
 }
 results[is.na(results$blastCover),'blastCover']<-0
 results[is.na(results$blastAllCover),'blastAllCover']<-0
 results[is.na(results$bactCover),'bactCover']<-0
+results[is.na(results$bactMinusPhage),'bactMinusPhage']<-0
 results$blastProp<-results$blastCover/results$nchar
 results$blastAllProp<-results$blastAllCover/results$nchar
 results$bactProp<-results$bactCover/results$nchar
+results$bactMinusPhageProp<-results$bactMinusPhage/results$nchar
+if(any(results$bactCover-results$bactMinusPhage>results$blastCover+results$blastAllCover))stop(simpleError('Something wrong with phage subtraction'))
 
 blastSums<-tapply(results$blastCover,results$set,sum)
 blastAllSums<-tapply(results$blastAllCover,results$set,sum)
-blastBactSums<-tapply(results$bactCover,results$set,sum)
+blastBactSums<-tapply(results$bactMinusPhage,results$set,sum)
 nBases<-tapply(results$nchar,results$set,sum)
 notPhage<-nBases-blastSums
 notVirus<-nBases-blastAllSums
@@ -67,3 +82,4 @@ print(fisher.test(matrix(c(notPhage[select],blastSums[select]),nrow=2)))
 print(data.frame('phage'=blastSums,'notPhage'=notPhage))
 print(fisher.test(matrix(c(notBact[select],blastBactSums[select]),nrow=2)))
 
+cbind('bact'=blastBactSums,'phage'=blastSums,nBases,'propPhage'=round(blastSums/nBases,3),'propBact'=round(blastBactSums/nBases,3))
