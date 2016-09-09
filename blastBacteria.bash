@@ -7,7 +7,9 @@ set -e
 echo Making bacteria blast db
 if [ ! -e bacteria/bacteria.00.nin ];then
   cd bacteria
-  find -name '*.gz' -exec zcat {} \; |makeblastdb -dbtype nucl -out bacteria -title bacteria
+  #a bit of a monstrosity to add the file name to all the > in the various bacteria files
+  find . -name '*.gz' -exec bash -c 'x=$(echo {}|sed s@./@@|sed s/.\\..*//);zcat {}|sed "s@>@>${x}___@"' \; |makeblastdb -dbtype nucl -out bacteria -title bacteria
+  #find -name '*.gz' -exec zcat {} \; |makeblastdb -dbtype nucl -out bacteria -title bacteria
   cd ..
 fi
 
