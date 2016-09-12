@@ -18,6 +18,12 @@ condenseBlast<-function(xx,subtract=NULL){
   return(unlist(out))
 }
 
+getBestBlastHit<-function(xx){
+  best<-ave(xx$bitScore,xx$qName,FUN=max)
+  hits<-tapply(xx[xx$bitScore==best,'tName'],xx[xx$bitScore==best,'qName'],FUN=function(x)paste(x,collapse='|'))
+  return(hits)
+}
+
 
 dataDir<-"/media/THING1/alexandra/4Gut_Phage_and_Bacteria_DNA_Modifications/014Blast16s/"
 faFiles<-list.files(dataDir,'fasta$')
@@ -37,16 +43,19 @@ blastCover<-lapply(blasts,condenseBlast)
 blastAllCover<-lapply(blastAlls,condenseBlast)
 blastBactCover<-lapply(blastBacts,condenseBlast)
 blastBactCoverMinusPhage<-mapply(function(bac,phage1,phage2)condenseBlast(bac,rbind(phage1,phage2)),blastBacts,blasts,blastAlls)
+bactHits<-lapply(blastBacts,getBestBlastHit)
 results$blastAllCover<-NA
 results$blastCover<-NA
 results$bactCover<-NA
 results$bactMinusPhage<-NA
+results$bactHit<-NA
 for(ii in names(blastCover)){
   message(ii)
   results[results$set==ii,'blastCover']<-blastCover[[ii]][results[results$set==ii,'name']]
   results[results$set==ii,'blastAllCover']<-blastAllCover[[ii]][results[results$set==ii,'name']]
   results[results$set==ii,'bactCover']<-blastBactCover[[ii]][results[results$set==ii,'name']]
   results[results$set==ii,'bactMinusPhage']<-blastBactCoverMinusPhage[[ii]][results[results$set==ii,'name']]
+  results[results$set==ii,'bactHit']<-bactHits[[ii]][results[results$set==ii,'name']]
 }
 results[is.na(results$blastCover),'blastCover']<-0
 results[is.na(results$blastAllCover),'blastAllCover']<-0
@@ -83,3 +92,12 @@ print(data.frame('phage'=blastSums,'notPhage'=notPhage))
 print(fisher.test(matrix(c(notBact[select],blastBactSums[select]),nrow=2)))
 
 cbind('bact'=blastBactSums,'phage'=blastSums,nBases,'propPhage'=round(blastSums/nBases,3),'propBact'=round(blastBactSums/nBases,3))
+
+phage25BactHits<-sapply(lapply(strsplit(sub('^_','',results[results$set=='phage25'&results$bactMinusPhageProp==1,][,'bactHit']),'\\|'),function(x)sapply(unique(lapply(strsplit(x,'_'),'[',1:2)),paste,collapse=' ')),paste,collapse='|')
+sort(table(phage25BactHits))
+phage25GenusHits<-sapply(lapply(strsplit(sub('^_','',results[results$set=='phage25'&results$bactMinusPhageProp==1,][,'bactHit']),'\\|'),function(x)sapply(unique(lapply(strsplit(x,'_'),'[',1)),paste,collapse=' ')),paste,collapse='|')
+sort(table(phage25GenusHits[phage25BactHits!='Faecalibacterium prausnitzii']))
+
+bacteriaBactHits<-sapply(lapply(strsplit(sub('^_','',results[grepl('bacteria',results$set)&results$bactMinusPhageProp==1,][,'bactHit']),'\\|'),function(x)sapply(unique(lapply(strsplit(x,'_'),'[',1:2)),paste,collapse=' ')),paste,collapse='|')
+head(t(t(sort(table(bacteriaBactHits),decreasing=TRUE))),10)
+
