@@ -23,6 +23,11 @@ getBestBlastHit<-function(xx){
   hits<-tapply(xx[xx$bitScore==best,'tName'],xx[xx$bitScore==best,'qName'],FUN=function(x)paste(x,collapse='|'))
   return(hits)
 }
+getBestBlastRow<-function(xx){
+  best<-ave(xx$bitScore,xx$qName,FUN=max)
+  hits<-split(xx[xx$bitScore==best,],xx[xx$bitScore==best,'qName'])
+  return(hits)
+}
 
 
 dataDir<-"/media/THING1/alexandra/4Gut_Phage_and_Bacteria_DNA_Modifications/014Blast16s/"
@@ -44,6 +49,7 @@ blastAllCover<-lapply(blastAlls,condenseBlast)
 blastBactCover<-lapply(blastBacts,condenseBlast)
 blastBactCoverMinusPhage<-mapply(function(bac,phage1,phage2)condenseBlast(bac,rbind(phage1,phage2)),blastBacts,blasts,blastAlls)
 bactHits<-lapply(blastBacts,getBestBlastHit)
+bactHitRows<-lapply(blastBacts,getBestBlastRow)
 results$blastAllCover<-NA
 results$blastCover<-NA
 results$bactCover<-NA
@@ -66,6 +72,7 @@ results$blastAllProp<-results$blastAllCover/results$nchar
 results$bactProp<-results$bactCover/results$nchar
 results$bactMinusPhageProp<-results$bactMinusPhage/results$nchar
 if(any(results$bactCover-results$bactMinusPhage>results$blastCover+results$blastAllCover))stop(simpleError('Something wrong with phage subtraction'))
+results$simpleHit<-sapply(lapply(strsplit(sub('^_','',results[,'bactHit']),'\\|'),function(x)sapply(unique(lapply(strsplit(x,'_'),'[',1:2)),paste,collapse=' ')),paste,collapse='|')
 
 blastSums<-tapply(results$blastCover,results$set,sum)
 blastAllSums<-tapply(results$blastAllCover,results$set,sum)
@@ -101,3 +108,15 @@ sort(table(phage25GenusHits[phage25BactHits!='Faecalibacterium prausnitzii']))
 bacteriaBactHits<-sapply(lapply(strsplit(sub('^_','',results[grepl('bacteria',results$set)&results$bactMinusPhageProp==1,][,'bactHit']),'\\|'),function(x)sapply(unique(lapply(strsplit(x,'_'),'[',1:2)),paste,collapse=' ')),paste,collapse='|')
 head(t(t(sort(table(bacteriaBactHits),decreasing=TRUE))),10)
 
+
+#check location of Faecalibacterium prausnitzii hits
+fpraus<-do.call(rbind,bactHitRows[['phage25']][results[results$bactMinusPhageProp==1&results$simpleHit=='Faecalibacterium prausnitzii'&results$set=='phage25','name']])
+table(fpraus$tName)
+pdf('fpraus.pdf')
+for(ii in sort(unique(fpraus$tName))){
+  thisData<-fpraus[fpraus$tName==ii,]
+  thisData<-thisData[order(thisData$tStart),]
+  plot(1,1,type='n',xlim=range(c(thisData$tStart,thisData$tEnd)),main=ii,ylim=c(.5,nrow(thisData)+.5),yaxt='n',ylab='Contigs',xlab='Genomic position')
+  segments(thisData$tStart,1:nrow(thisData),thisData$tEnd,1:nrow(thisData),lwd=3)
+}
+dev.off()
