@@ -3,6 +3,10 @@ library(parallel)
 library(IRanges)
 
 condenseBlast<-function(xx,subtract=NULL){
+  flip<-xx$qStart>xx$qEnd
+  tmp<-xx$qEnd
+  xx$qEnd[flip]<-xx$qStart[flip]
+  xx$qStart[flip]<-tmp[flip]
   if(!is.null(subtract)){
     subRanges<-out<-by(subtract[,c('qStart','qEnd')],subtract$qName,function(yy){
       return(reduce(IRanges(yy$qStart,yy$qEnd)))
@@ -36,23 +40,27 @@ faFiles<-faFiles[!grepl('^gg',faFiles)]
 blastFiles<-file.path('work',basename(sub('\\.fasta','.blast.gz',faFiles)))
 blastAllFiles<-file.path('work',basename(sub('\\.fasta','.virus.blast.gz',faFiles)))
 blastBactFiles<-file.path('work',basename(sub('\\.fasta','.bacteria.blast.gz',faFiles)))
-names(faFiles)<-names(blastFiles)<-names(blastAllFiles)<-names(blastBactFiles)<-sub('.fasta','',sub('_100bp_.*','',faFiles))
+blastVirginFiles<-file.path('work',basename(sub('\\.fasta','.virgin.blast.gz',faFiles)))
+names(faFiles)<-names(blastFiles)<-names(blastAllFiles)<-names(blastBactFiles)<-names(blastVirginFiles)<-sub('.fasta','',sub('_100bp_.*','',faFiles))
 
 seqs<-mclapply(file.path(dataDir,faFiles),read.fa,mc.cores=10)
 blasts<-mclapply(blastFiles,read.table,header=FALSE,mc.cores=10,col.names=c('qName','tName','percIdent','alignLength','mismatch','gapOpens','qStart','qEnd','tStart','tEnd','eVal','bitScore'),stringsAsFactors=FALSE)
 blastAlls<-mclapply(blastAllFiles,read.table,header=FALSE,mc.cores=10,col.names=c('qName','tName','percIdent','alignLength','mismatch','gapOpens','qStart','qEnd','tStart','tEnd','eVal','bitScore'),stringsAsFactors=FALSE)
 blastBacts<-mclapply(blastBactFiles,read.table,header=FALSE,mc.cores=10,col.names=c('qName','tName','percIdent','alignLength','mismatch','gapOpens','qStart','qEnd','tStart','tEnd','eVal','bitScore'),stringsAsFactors=FALSE)
-names(seqs)<-names(blasts)<-names(blastAlls)<-names(blastBacts)<-names(faFiles)
+blastVirgin<-mclapply(blastVirginFiles,read.table,header=FALSE,mc.cores=10,col.names=c('qName','tName','percIdent','alignLength','mismatch','gapOpens','qStart','qEnd','tStart','tEnd','eVal','bitScore'),stringsAsFactors=FALSE)
+names(seqs)<-names(blasts)<-names(blastAlls)<-names(blastBacts)<-names(blastVirgin)<-names(faFiles)
 results<-data.frame('name'=unlist(lapply(seqs,function(x)x$name)),'nchar'=unlist(lapply(seqs,function(x)nchar(x$seq))),'set'=rep(names(seqs),sapply(seqs,nrow)),stringsAsFactors=FALSE)
 blastCover<-lapply(blasts,condenseBlast)
 blastAllCover<-lapply(blastAlls,condenseBlast)
 blastBactCover<-lapply(blastBacts,condenseBlast)
+blastVirginCover<-lapply(blastVirgin,condenseBlast)
 blastBactCoverMinusPhage<-mapply(function(bac,phage1,phage2)condenseBlast(bac,rbind(phage1,phage2)),blastBacts,blasts,blastAlls)
 bactHits<-lapply(blastBacts,getBestBlastHit)
 bactHitRows<-lapply(blastBacts,getBestBlastRow)
 results$blastAllCover<-NA
 results$blastCover<-NA
 results$bactCover<-NA
+results$virginCover<-NA
 results$bactMinusPhage<-NA
 results$bactHit<-NA
 for(ii in names(blastCover)){
@@ -60,16 +68,19 @@ for(ii in names(blastCover)){
   results[results$set==ii,'blastCover']<-blastCover[[ii]][results[results$set==ii,'name']]
   results[results$set==ii,'blastAllCover']<-blastAllCover[[ii]][results[results$set==ii,'name']]
   results[results$set==ii,'bactCover']<-blastBactCover[[ii]][results[results$set==ii,'name']]
+  results[results$set==ii,'virginCover']<-blastVirginCover[[ii]][results[results$set==ii,'name']]
   results[results$set==ii,'bactMinusPhage']<-blastBactCoverMinusPhage[[ii]][results[results$set==ii,'name']]
   results[results$set==ii,'bactHit']<-bactHits[[ii]][results[results$set==ii,'name']]
 }
 results[is.na(results$blastCover),'blastCover']<-0
 results[is.na(results$blastAllCover),'blastAllCover']<-0
 results[is.na(results$bactCover),'bactCover']<-0
+results[is.na(results$virginCover),'virginCover']<-0
 results[is.na(results$bactMinusPhage),'bactMinusPhage']<-0
 results$blastProp<-results$blastCover/results$nchar
 results$blastAllProp<-results$blastAllCover/results$nchar
 results$bactProp<-results$bactCover/results$nchar
+results$virginProp<-results$virginCover/results$nchar
 results$bactMinusPhageProp<-results$bactMinusPhage/results$nchar
 if(any(results$bactCover-results$bactMinusPhage>results$blastCover+results$blastAllCover))stop(simpleError('Something wrong with phage subtraction'))
 results$simpleHit<-sapply(lapply(strsplit(sub('^_','',results[,'bactHit']),'\\|'),function(x)sapply(unique(lapply(strsplit(x,'_'),'[',1:2)),paste,collapse=' ')),paste,collapse='|')
