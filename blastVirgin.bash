@@ -8,7 +8,7 @@ makeblastdb -in vlpDB_nr.c95.fasta -dbtype prot
 cd ..
 
 for ii in /media/THING1/alexandra/4Gut_Phage_and_Bacteria_DNA_Modifications/014Blast16s/*.fasta;do
-  outfile=work/virgin_$(basename $ii|sed 's/\.fasta$//').blast.gz
+  outfile=work/$(basename $ii|sed 's/\.fasta$//').virgin.blast.gz
   if [ -e "$outfile" ];then
     echo $outfile already exists
     continue
