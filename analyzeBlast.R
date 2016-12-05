@@ -131,3 +131,23 @@ for(ii in sort(unique(fpraus$tName))){
   segments(thisData$tStart,1:nrow(thisData),thisData$tEnd,1:nrow(thisData),lwd=3)
 }
 dev.off()
+
+
+means<-do.call(rbind,lapply(
+  split(results[,c('blastProp','blastAllProp','bactProp','virginProp')],results$set),
+  function(xx)apply(xx,2,mean)
+))
+colnames(means)<-c('Phage','Virus','Bacteria','Virgin')
+cols<-rainbow.lab(nrow(means))
+pdf('blastSummary.pdf',height=4,width=4)
+  par(mar=c(1.2,4,.3,.1))
+  #log
+  info<-barplot(means,beside=TRUE,xaxt='n',log='y',yaxt='n',ylab='Proportion of contig bases matching',col=cols)
+  logAxis(2,las=1)
+  axis(1,apply(info,2,mean),colnames(means),padj=1,mgp=c(0,-.5,0),lwd=NA)
+  legend('topleft',fill=cols,rownames(means),bty='n')
+  #nonlog
+  info<-barplot(means,beside=TRUE,xaxt='n',ylab='Proportion of contig bases matching',col=cols,las=1)
+  axis(1,apply(info,2,mean),colnames(means),padj=1,mgp=c(0,-.5,0),lwd=NA)
+  legend('topleft',fill=cols,rownames(means),bty='n')
+dev.off()
