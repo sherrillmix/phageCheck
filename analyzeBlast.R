@@ -137,17 +137,47 @@ means<-do.call(rbind,lapply(
   split(results[,c('blastProp','blastAllProp','bactProp','virginProp')],results$set),
   function(xx)apply(xx,2,mean)
 ))
-colnames(means)<-c('Phage','Virus','Bacteria','Virgin')
+baseProps<-do.call(rbind,mapply(
+  function(xx,yy)apply(xx,2,sum)/apply(yy,2,sum),
+  split(results[,c('blastCover','blastAllCover','bactCover','virginCover')],results$set),
+  split(results[,c('nchar','nchar','nchar','nchar')],results$set),
+  SIMPLIFY=FALSE
+))
+colnames(means)<-colnames(baseProps)<-c('Phage','Virus','Bacteria','Virgin')
+
 cols<-rainbow.lab(nrow(means))
+
+basedBar<-function(datMatrix,base=1,col='white',...){
+  ylim<-range(datMatrix)
+  pos<-matrix(1:((nrow(datMatrix)+1)*ncol(datMatrix)),ncol=ncol(datMatrix))[1:nrow(datMatrix),]
+  xlim<-range(pos)+c(-.5,.5)
+  plot(1,1,type='n',...,xlim=xlim,ylim=ylim,bty='n')
+  rect(as.vector(pos)-.5,base,as.vector(pos)+.5,as.vector(datMatrix),col=col)
+  return(pos)
+}
+
 pdf('blastSummary.pdf',height=4,width=4)
   par(mar=c(1.2,4,.3,.1))
-  #log
-  info<-barplot(means,beside=TRUE,xaxt='n',log='y',yaxt='n',ylab='Proportion of contig bases matching',col=cols)
-  logAxis(2,las=1)
+  #contig mean
+  #log relative to Fresh
+  info<-basedBar(apply(means,2,function(x)x[-1]/x[1]),xaxt='n',log='y',yaxt='n',ylab='Mean enrichment in contig coverage\n(relative to bacteria_fresh)',col=cols[-1],mgp=c(2.1,1,0))
+  logAxis(2,las=1,mgp=c(1,.7,0))
+  axis(1,apply(info,2,mean),colnames(means),padj=1,mgp=c(0,-.5,0),lwd=NA)
+  legend('topright',fill=cols[-1],rownames(means)[-1],bty='n')
+  abline(h=1,lty=2)
+  #nonlog
+  info<-barplot(means,beside=TRUE,xaxt='n',ylab='Mean proportion of contigs matching',col=cols,las=1)
   axis(1,apply(info,2,mean),colnames(means),padj=1,mgp=c(0,-.5,0),lwd=NA)
   legend('topleft',fill=cols,rownames(means),bty='n')
+  #base props
+  #log
+  info<-basedBar(apply(baseProps,2,function(x)x[-1]/x[1]),xaxt='n',log='y',yaxt='n',ylab='Mean enrichment in bases matching\n(relative to bacteria_fresh)',col=cols[-1],mgp=c(2.1,1,0))
+  logAxis(2,las=1,mgp=c(1,.7,0))
+  axis(1,apply(info,2,mean),colnames(means),padj=1,mgp=c(0,-.5,0),lwd=NA)
+  legend('topright',fill=cols[-1],rownames(means)[-1],bty='n')
+  abline(h=1,lty=2)
   #nonlog
-  info<-barplot(means,beside=TRUE,xaxt='n',ylab='Proportion of contig bases matching',col=cols,las=1)
+  info<-barplot(baseProps,beside=TRUE,xaxt='n',ylab='Proportion of bases matching',col=cols,las=1)
   axis(1,apply(info,2,mean),colnames(means),padj=1,mgp=c(0,-.5,0),lwd=NA)
   legend('topleft',fill=cols,rownames(means),bty='n')
 dev.off()
