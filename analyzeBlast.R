@@ -156,6 +156,7 @@ basedBar<-function(datMatrix,base=1,col='white',...){
   return(pos)
 }
 
+
 pdf('blastSummary.pdf',height=4,width=4)
   par(mar=c(1.2,4,.3,.1))
   #contig mean
