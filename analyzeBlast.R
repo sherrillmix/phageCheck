@@ -189,3 +189,21 @@ pdf('blastSummary.pdf',height=4,width=4)
   axis(1,apply(info,2,mean),colnames(means),padj=1,mgp=c(0,-.5,0),lwd=NA)
   legend('topleft',fill=cols,rownames(means),bty='n')
 dev.off()
+
+
+pairFiles<-list.files('work','.pair.blast.gz',full.names=TRUE)
+pairs<-mclapply(pairFiles,read.table,header=FALSE,mc.cores=10,col.names=c('qName','tName','percIdent','alignLength','mismatch','gapOpens','qStart','qEnd','tStart','tEnd','eVal','bitScore'),stringsAsFactors=FALSE)
+names(pairFiles)<-pairFiles
+pairIds<-lapply(lapply(strsplit(basename(pairFiles),'\\.'),'[',1:2),function(xx)sub('_100bp_GC085','',xx))
+pairCover<-lapply(pairs,condenseBlast)
+
+#identity comparisons are doubled but probably doesnt matter
+pairCoverDf<-do.call(rbind,mapply(function(cover,pairId){
+  thisResults<-data.frame('name'=seqs[[pairId[[1]]]]$name,'nchar'=nchar(seqs[[pairId[[1]]]]$seq),'query'=pairId[1],'target'=pairId[2],'blastCover'=NA,stringsAsFactors=FALSE)
+  thisResults[,'blastCover']<-cover[thisResults$name]
+  thisResults[is.na(thisResults$blastCover),'blastCover']<-0
+  thisResults$prop<-thisResults$blastCover/thisResults$nchar
+  return(thisResults)
+},pairCover,pairIds,SIMPLIFY=FALSE))
+
+print(tapply(pairCoverDf$prop,list(pairCoverDf$query,pairCoverDf$target),mean))
